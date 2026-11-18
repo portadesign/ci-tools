@@ -1,0 +1,46 @@
+#!/bin/sh
+set -eu
+
+usage() {
+    echo 'ci-tools claude-review [pimcore|symfony]' >&2
+    exit 1
+}
+
+[ "${1:-}" = 'claude-review' ] || usage
+profile=${2:-}
+case "$profile" in *[!a-z0-9-]*) usage ;; esac
+
+target=.github/workflows/claude-review.yml
+mkdir -p .github/workflows
+cat > "$target" <<'YAML'
+name: Claude review
+
+on:
+  pull_request:
+    types: [review_requested, labeled]
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  id-token: write
+  actions: read
+
+jobs:
+  claude:
+    uses: portadesign/ci-tools/.github/workflows/claude-review.yml@main
+YAML
+if [ -n "$profile" ]; then
+    printf '    with:\n      profile: %s\n' "$profile" >> "$target"
+fi
+echo "Written $target"
+
+if command -v gh > /dev/null 2>&1; then
+    gh label create claude-review --description 'Request a Claude code review' --color D97757 --force
+else
+    echo "Run on the host: gh label create claude-review --description 'Request a Claude code review' --color D97757 --force"
+fi

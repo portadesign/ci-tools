@@ -1,0 +1,16 @@
+{
+  "name": "portadesign/ci-tools",
+  "description": "Shared GitHub Actions workflows and their installer: vendor/bin/ci-tools claude-review",
+  "type": "library",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "PORTA DESIGN",
+      "email": "development@portadesign.cz",
+      "homepage": "https://portadesign.cz"
+    }
+  ],
+  "bin": [
+    "bin/ci-tools"
+  ]
+}
