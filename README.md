@@ -43,6 +43,4 @@ Changes on `main` apply to every repository at once.
 gh workflow disable "Claude review" -R portadesign/<repo>
 ```
 
-To block a repository for good, add it to the list in both `if:` conditions of the workflow.
-
 Authentication: [wiki](https://github.com/portadesign/wiki/blob/main/GitHub/claude-review.md#keyless-authentication).

@@ -11,7 +11,6 @@ jobs:
   review:
     if: >
       github.event_name == 'pull_request' &&
-      !contains(fromJSON('[]'), github.repository) &&
       (github.event.requested_team.slug == 'claude-review' ||
        github.event.label.name == 'claude-review')
     runs-on: ubuntu-latest
@@ -89,7 +88,6 @@ jobs:
   mention:
     if: >
       github.event_name != 'pull_request' &&
-      !contains(fromJSON('[]'), github.repository) &&
       contains(github.event.comment.body, '@claude') &&
       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association) &&
       (github.event_name == 'pull_request_review_comment' || github.event.issue.pull_request)
