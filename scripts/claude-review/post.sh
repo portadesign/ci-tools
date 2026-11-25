@@ -11,12 +11,25 @@ fi
 cd "$DIR"
 printf '%s' "$result" > result.json
 
-jq -n --slurpfile result result.json --slurpfile threads threads.json \
+jq -n --slurpfile result result.json --slurpfile threads threads.json --slurpfile hunks hunks.json \
     --rawfile files review-files.txt \
     --arg head "$HEAD" --arg scope "$SCOPE" --argjson total "$TOTAL" --arg done "$(cat done.txt)" '
   def pad: tostring | if length < 2 then "0" + . else . end;
   def icon: if .blocking then "❌" else "⚠️" end;
   def fence: if contains("```") then "````" else "```" end;
+  def place($hunks):
+    . as $finding
+    | ($hunks[.path] // []) as $ranges
+    | ($ranges | map(select(.[0] <= $finding.line and $finding.line <= .[1])) | .[0]) as $hunk
+    | if $hunk then
+        if .start_line == null or .start_line == .line then del(.start_line)
+        elif .start_line < .line and .start_line >= $hunk[0] then .
+        else del(.start_line, .suggestion) end
+      elif ($ranges | length) > 0 then
+        del(.start_line, .suggestion)
+        | .line = ($ranges | map([.[0], ([.[1], $finding.line] | min)] | max) | min_by(. - $finding.line | fabs))
+        | .body = "Placed on the nearest changed line of the file. " + .body
+      else .unplaced = true end;
   $result[0] as $r
   | ($done | split(",") | map(select(. != "") | tonumber)) as $done
   | ($threads[0] | map(select(.earlier_finding and (.closed | not)))) as $open
@@ -24,7 +37,7 @@ jq -n --slurpfile result result.json --slurpfile threads threads.json \
   | ($open | map(select(.url as $url | $r.resolved | index($url) == null))) as $still
   | ($files | split("\n")) as $files
   | ($r.not_read | map(select(split(": ")[0] as $path | $files | index($path) != null))) as $unread
-  | ($r.findings | map(select(.path != "" and .line > 0))) as $findings
+  | ($r.findings | map(select(.path != "" and .line > 0) | place($hunks[0]))) as $findings
   | ($findings | map(select(.blocking))) as $blocking
   | ($findings | map(select(.blocking | not))) as $warnings
   | ($blocking + $warnings[0:5]) as $shown
@@ -32,7 +45,8 @@ jq -n --slurpfile result result.json --slurpfile threads threads.json \
   | (($blocking | length) > 0 or ($still | any(.comments[0].body | startswith("❌")))) as $fail
   | ([if $fail then "❌ Fix first" else "✅ Merge" end]
       + (if ($shown | length) > 0
-         then [""] + ($shown | to_entries | map("\(.key + 1 | pad). \(.value | icon) \(.value.path):\(.value.line): \(.value.title)"))
+         then [""] + ($shown | to_entries | map("\(.key + 1 | pad). \(.value | icon) \(.value.path):\(.value.line): \(.value.title)"
+           + (if .value.unplaced then " \(.value.body)" else "" end)))
          else [] end)
       + (if $more > 0 then ["\($more) more ⚠️ not listed."] else [] end)
       + (if ($still | length) > 0
@@ -50,11 +64,11 @@ jq -n --slurpfile result result.json --slurpfile threads threads.json \
         commit_id: $head,
         event: "COMMENT",
         body: $body,
-        comments: ($shown | map(
-          {path, line, side: "RIGHT",
+        comments: ($shown | map(select(.unplaced | not)
+          | {path, line, side: "RIGHT",
            body: ("\(icon) \(.body)"
              + (if (.suggestion // "") != "" then "\n\n\(.suggestion | fence)suggestion\n\(.suggestion)\n\(.suggestion | fence)" else "" end))}
-          + (if (.start_line // .line) < .line then {start_line, start_side: "RIGHT"} else {} end)))
+          + (if .start_line then {start_line, start_side: "RIGHT"} else {} end)))
       },
       fallback: {
         commit_id: $head,

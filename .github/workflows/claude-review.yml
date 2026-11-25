@@ -71,9 +71,10 @@ jobs:
             checked out. CONTEXT holds:
             - `pr.md`: title and description of the PR.
             - `diff-01.txt` to `diff-${{ steps.context.outputs.parts }}.txt`: the
-              hunks to review, in parts. SCOPE full: the whole PR. SCOPE
-              delta: only what changed since the last review; judge only
-              that.
+              hunks to review, in parts. Each hunk line starts with its
+              line number in the checked-out file; removed lines have none.
+              SCOPE full: the whole PR. SCOPE delta: only what changed since
+              the last review; judge only that.
             - `files.txt`: every changed file of the PR with its status and
               line counts; the last column says when a file is not for
               review.
@@ -137,10 +138,10 @@ jobs:
             Post nothing yourself; return the structured output, in
             English, terse, no praise, no restating the diff:
             - `findings`: new ones only: every blocking one and the 5 most
-              severe warnings. `path` and `line`: a line of the checked-out
-              file inside a hunk of the diff; a finding with no line of
-              its own (a missing test, a missing migration) takes the
-              changed line closest to it. `title`: the defect in one
+              severe warnings. `path` and `line`: the number a hunk line
+              starts with, never the line number of the diff part itself; a
+              finding with no line of its own (a missing test, a missing
+              migration) takes the changed line closest to it. `title`: the defect in one
               sentence. `body`: at most 3 sentences: defect, trigger, fix.
               `suggestion`, only when the fix replaces at most 10 lines:
               the complete replacement of lines `start_line` to `line`,

@@ -94,9 +94,29 @@ jq -r "$skipped"'
 jq -r "$skipped"'.[] | select(.filename | skipped | not) | .filename' source.json > review-files.txt
 total=$(grep -c . review-files.txt || true)
 parts=$(awk -v max=40000 '
-  /^diff --git / && (part == 0 || size > max) { part++; size = 0; file = sprintf("diff-%02d.txt", part) }
-  { print > file; size += length($0) + 1 }
+  {
+      line = $0
+      if (/^diff --git /) {
+          hunk = 0
+          if (part == 0 || size > max) { part++; size = 0; file = sprintf("diff-%02d.txt", part) }
+      } else if (/^@@ /) {
+          hunk = 1
+          match($0, /\+[0-9]+/)
+          number = substr($0, RSTART + 1, RLENGTH - 1) + 0
+      } else if (hunk) {
+          sign = substr($0, 1, 1)
+          if (sign == "-" || sign == "\\") line = sprintf("%5s %s", "", $0)
+          else line = sprintf("%5d %s", number++, $0)
+      }
+      print line > file
+      size += length(line) + 1
+  }
   END { printf "%02d", part }' pr.diff)
+
+jq 'map({key: .filename, value: [(.patch // "") | split("\n")[] | select(startswith("@@ "))
+      | capture("^@@ -[0-9]+(,[0-9]+)? \\+(?<start>[0-9]+)(,(?<count>[0-9]+))? @@")
+      | (.start | tonumber) as $start | ((.count // "1") | tonumber) as $count
+      | select($count > 0) | [$start, $start + $count - 1]]}) | from_entries' files.json > hunks.json
 
 : > rules.md
 if [ -n "$profile" ]; then
