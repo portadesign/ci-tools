@@ -3,16 +3,17 @@ set -eu
 
 usage() {
     echo 'ci-tools claude-review [pimcore|symfony]' >&2
+    echo 'ci-tools composer-audit [php-version]' >&2
     exit 1
 }
 
-[ "${1:-}" = 'claude-review' ] || usage
-profile=${2:-}
-case "$profile" in *[!a-z0-9-]*) usage ;; esac
+claude_review() {
+    profile=${1:-}
+    case "$profile" in *[!a-z0-9-]*) usage ;; esac
 
-target=.github/workflows/claude-review.yml
-mkdir -p .github/workflows
-cat > "$target" <<'YAML'
+    target=.github/workflows/claude-review.yml
+    mkdir -p .github/workflows
+    cat > "$target" <<'YAML'
 name: Claude review
 
 on:
@@ -34,13 +35,56 @@ jobs:
   claude:
     uses: portadesign/ci-tools/.github/workflows/claude-review.yml@main
 YAML
-if [ -n "$profile" ]; then
-    printf '    with:\n      profile: %s\n' "$profile" >> "$target"
-fi
-echo "Written $target"
+    if [ -n "$profile" ]; then
+        printf '    with:\n      profile: %s\n' "$profile" >> "$target"
+    fi
+    echo "Written $target"
 
-if command -v gh > /dev/null 2>&1; then
-    gh label create claude-review --description 'Request a Claude code review' --color D97757 --force
-else
-    echo "Run on the host: gh label create claude-review --description 'Request a Claude code review' --color D97757 --force"
-fi
+    if command -v gh > /dev/null 2>&1; then
+        gh label create claude-review --description 'Request a Claude code review' --color D97757 --force
+    else
+        echo "Run on the host: gh label create claude-review --description 'Request a Claude code review' --color D97757 --force"
+    fi
+}
+
+default_branch() {
+    branch=$(git symbolic-ref -q --short refs/remotes/origin/HEAD 2> /dev/null) || branch=origin/main
+    echo "${branch#origin/}"
+}
+
+composer_audit() {
+    php_version=${1:-}
+    case "$php_version" in *[!0-9.]*) usage ;; esac
+
+    target=.github/workflows/composer-audit.yml
+    mkdir -p .github/workflows
+    cat > "$target" <<YAML
+name: Composer audit
+
+on:
+  pull_request:
+  push:
+    branches: [$(default_branch)]
+  schedule:
+    - cron: '0 6 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    uses: portadesign/ci-tools/.github/workflows/composer-audit.yml@main
+YAML
+    if [ -n "$php_version" ]; then
+        printf "    with:\n      php-version: '%s'\n" "$php_version" >> "$target"
+    fi
+    echo "Written $target"
+}
+
+command=${1:-}
+[ $# -gt 0 ] && shift
+case "$command" in
+    claude-review) claude_review "$@" ;;
+    composer-audit) composer_audit "$@" ;;
+    *) usage ;;
+esac
