@@ -1,0 +1,28 @@
+name: Composer audit
+
+on:
+  workflow_call:
+    inputs:
+      php-version:
+        type: string
+        default: '8.3'
+      composer-version:
+        type: string
+        default: 'v2'
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ inputs.php-version }}
+          tools: composer:${{ inputs.composer-version }}
+          coverage: none
+
+      - run: composer audit --locked --abandoned=report

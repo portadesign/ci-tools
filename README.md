@@ -44,3 +44,40 @@ gh workflow disable "Claude review" -R portadesign/<repo>
 ```
 
 Authentication: [wiki](https://github.com/portadesign/wiki/blob/main/GitHub/claude-review.md#keyless-authentication).
+
+## Composer audit
+
+`composer audit --locked --abandoned=report` against `composer.lock`, without `composer install`.
+
+| Trigger | Result |
+|---|---|
+| Pull request, push to the default branch | Fails on a security advisory, reports abandoned packages |
+| Monday 06:00 UTC | Same check, catches advisories published since the last push |
+
+### Install
+
+```sh
+composer config repositories.ci-tools vcs https://github.com/portadesign/ci-tools
+composer require --dev portadesign/ci-tools:dev-main
+vendor/bin/ci-tools composer-audit 8.1
+```
+
+Without Composer:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/portadesign/ci-tools/main/bin/ci-tools | sh -s composer-audit 8.1
+```
+
+The command writes `.github/workflows/composer-audit.yml`. Commit the file. The argument is the PHP version,
+default `8.3`.
+
+### Exceptions
+
+An ignored advisory stays in the project's `composer.json` under `config.policy.advisories.ignore-id`, read by
+Composer ≥ 2.10. The workflow does not handle exceptions.
+
+### Turn off
+
+```sh
+gh workflow disable "Composer audit" -R portadesign/<repo>
+```
