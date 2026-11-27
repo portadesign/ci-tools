@@ -8,8 +8,14 @@ On-demand code review of a pull request by Claude.
 
 | Action | Result |
 |---|---|
-| Add the label `claude-review` to a PR | Review: verdict, numbered findings, inline comments on every ❌ |
+| Add the label `claude-review` to a PR | One review of the whole PR: verdict, numbered findings, an inline thread per finding, a suggested change where the fix is short |
+| Push to a PR that has the label | One review of what changed since the last one; earlier findings are listed as still open or resolved |
+| Remove the label | No review on further pushes |
 | Write `@claude …` in a PR comment | Answer or change, organization members only |
+
+- One review is one notification; the summaries of earlier reviews are hidden.
+- Generated files, lock files and fixture data are not reviewed.
+- A push that rewrites history (rebase, force-push) is reviewed in full.
 
 ### Install
 
@@ -27,15 +33,35 @@ curl -fsSL https://raw.githubusercontent.com/portadesign/ci-tools/main/bin/ci-to
 
 The command writes `.github/workflows/claude-review.yml` and creates the label. Commit the file.
 
+The file only forwards pull request events; which of them start a review is decided here, so it needs no
+reinstall when the review changes.
+
 ### Rules
 
 | Source | Applies to |
 |---|---|
 | Prompt in `.github/workflows/claude-review.yml` | Every repository |
-| `profiles/<name>.md`, chosen by the argument (`pimcore`, `symfony`) | Repositories on that stack |
-| `AGENTS.md`, `CLAUDE.md` of the repository | That repository |
+| `profiles/<name>.md`, chosen by the argument (`pimcore`, `symfony`); `pimcore` includes `symfony` | Repositories on that stack |
+| `AGENTS.md`, `CLAUDE.md` of the repository, and what its code consistently does | That repository; wins over the two above |
 
 Changes on `main` apply to every repository at once.
+
+### Test a change
+
+Push a branch of ci-tools and point one repository at it:
+
+```yaml
+jobs:
+  claude:
+    uses: portadesign/ci-tools/.github/workflows/claude-review.yml@<branch>
+    with:
+      profile: pimcore
+      ref: <branch>
+```
+
+`ref` makes the workflow load its scripts and profiles from that branch. Locally, `scripts/claude-review/context.sh`
+runs against any PR (`GITHUB_REPOSITORY`, `PR`, `DIR`), and `post.sh` prints the review without posting it when
+`DRY_RUN=1`.
 
 ### Turn off
 

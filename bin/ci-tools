@@ -18,7 +18,7 @@ name: Claude review
 
 on:
   pull_request:
-    types: [review_requested, labeled]
+    types: [opened, reopened, ready_for_review, review_requested, labeled, synchronize]
   issue_comment:
     types: [created]
   pull_request_review_comment:
