@@ -9,7 +9,7 @@ On-demand code review of a pull request by Claude.
 | Action | Result |
 |---|---|
 | Add the label `claude-review` to a PR | One review of the whole PR: verdict, numbered findings, an inline thread per finding, a suggested change where the fix is short |
-| Push to a PR that has the label | One review of what changed since the last one; earlier findings are listed as still open or counted as resolved |
+| Push to a PR that has the label | One review of what changed since the last one; earlier findings are listed as still open or resolved |
 | Remove the label | No review on further pushes |
 | Write `@claude …` in a PR comment | Answer or change, organization members only |
 

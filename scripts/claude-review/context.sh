@@ -5,7 +5,7 @@ set -euo pipefail
 action=${ACTION:-}
 profile=${PROFILE:-}
 raw=${RAW:-https://raw.githubusercontent.com/portadesign/ci-tools/main}
-skipped='def skipped: test("(^|/)(composer\\.lock|symfony\\.lock|package-lock\\.json|yarn\\.lock|pnpm-lock\\.yaml)$|^var/classes/|^public/(build|bundles)/|\\.min\\.(js|css)$|\\.map$|(^|/)[Ff]ixtures?/.*\\.(json|xml|csv|html?|txt|sql|ya?ml|pdf)$");'
+skipped='def skipped: test("(^|/)([^/]*\\.lock|package-lock\\.json|pnpm-lock\\.yaml)$|^var/classes/|^public/(build|bundles)/|\\.min\\.(js|css)$|\\.map$|(^|/)[Ff]ixtures?/.*\\.(json|xml|csv|html?|txt|sql|ya?ml|pdf)$");'
 
 mkdir -p "$DIR"
 cd "$DIR"
@@ -37,7 +37,7 @@ gh api graphql -f owner="${GITHUB_REPOSITORY%/*}" -f repo="${GITHUB_REPOSITORY#*
 
 marker=$(jq -r '[.data.repository.pullRequest.reviews.nodes[]
   | select(.author.login == "github-actions")
-  | .body | capture("<!-- claude-review sha=(?<sha>[0-9a-f]{40}) done=(?<done>[0-9,]*) -->")]
+  | .body | capture("<!-- claude-review sha=(?<sha>[0-9a-f]{40}) done=(?<done>[0-9,]*) -->\\s*$")]
   | last // {sha: "", done: ""} | "\(.sha) \(.done)"' gql.json)
 base=${marker% *}
 echo "${marker#* }" > done.txt
@@ -72,9 +72,22 @@ if [ "$action" = synchronize ] && [ -n "$base" ]; then
     fi
 fi
 
+hunk='def hunk: capture("^@@ -[0-9]+(,[0-9]+)? \\+(?<start>[0-9]+)(,(?<count>[0-9]+))? @@")
+  | (.start | tonumber) as $start | ((.count // "1") | tonumber) as $count | [$start, $start + $count - 1];'
+
+jq "$hunk"'map({key: .filename, value: [(.patch // "") | split("\n")[] | select(startswith("@@ "))
+      | hunk | select(.[0] <= .[1])]}) | from_entries' files.json > hunks.json
+
 if [ "$scope" = delta ]; then
-    jq --slurpfile pr files.json '($pr[0] | map(.filename)) as $names
-      | [.files[] | select(.filename as $name | $names | index($name) != null)]' compare.json > source.json
+    jq --slurpfile hunks hunks.json "$hunk"'
+      [.files[] | $hunks[0][.filename] as $ranges | select($ranges != null)
+        | if .patch then
+            .patch = ([.patch | split("\n")
+              | reduce .[] as $line ([]; if ($line | startswith("@@ ")) then . + [[$line]] elif length > 0 then .[-1] += [$line] else . end)
+              | .[] | select(.[0] | hunk | . as [$start, $end] | any($ranges[]; .[0] <= ([$start, $end] | max) and $start <= .[1]))
+              | join("\n")] | join("\n"))
+            | select(.patch != "")
+          else . end]' compare.json > source.json
 else
     cp files.json source.json
 fi
@@ -113,17 +126,12 @@ parts=$(awk -v max=40000 '
   }
   END { printf "%02d", part }' pr.diff)
 
-jq 'map({key: .filename, value: [(.patch // "") | split("\n")[] | select(startswith("@@ "))
-      | capture("^@@ -[0-9]+(,[0-9]+)? \\+(?<start>[0-9]+)(,(?<count>[0-9]+))? @@")
-      | (.start | tonumber) as $start | ((.count // "1") | tonumber) as $count
-      | select($count > 0) | [$start, $start + $count - 1]]}) | from_entries' files.json > hunks.json
-
 : > rules.md
 if [ -n "$profile" ]; then
     case "$profile" in *[!a-z0-9-]*) echo "Invalid profile: $profile" >&2; exit 1 ;; esac
     case "$profile" in pimcore) names='symfony pimcore' ;; *) names=$profile ;; esac
     for name in $names; do
-        curl -fsSL "$raw/profiles/$name.md" >> rules.md
+        curl -fsSL --retry 3 "$raw/profiles/$name.md" >> rules.md
     done
 fi
 

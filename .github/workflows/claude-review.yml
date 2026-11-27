@@ -42,7 +42,7 @@ jobs:
           export RAW="https://raw.githubusercontent.com/portadesign/ci-tools/$REF"
           mkdir -p "$DIR"
           for script in context post; do
-            curl -fsSL "$RAW/scripts/claude-review/$script.sh" -o "$DIR/$script.sh"
+            curl -fsSL --retry 3 "$RAW/scripts/claude-review/$script.sh" -o "$DIR/$script.sh"
           done
           bash "$DIR/context.sh"
 
@@ -51,6 +51,7 @@ jobs:
         with:
           ref: ${{ steps.context.outputs.head }}
           fetch-depth: 1
+          persist-credentials: false
 
       - id: claude
         if: steps.context.outputs.total != '0'
@@ -62,8 +63,6 @@ jobs:
           anthropic_workspace_id: wrkspc_012LeEaC25B2aaqjaHKMtmJb
           github_token: ${{ github.token }}
           prompt: |
-            REPO: ${{ github.repository }}
-            PR NUMBER: ${{ github.event.pull_request.number }}
             CONTEXT: ${{ steps.context.outputs.dir }}
             SCOPE: ${{ steps.context.outputs.scope }}
 
@@ -87,8 +86,6 @@ jobs:
                Reading them all is the job: a part you skipped makes the
                review wrong, however sure the rest looks. Open a file
                marked `(no patch)` only when it is source code.
-            3. The code a hunk does not show: the rest of the method, the
-               callers of a changed signature, the config that wires it.
             Generated files, lock files and fixture data are left out of
             the parts. Do not read them; open a fixture only when a test's
             assertion depends on it.
@@ -101,12 +98,6 @@ jobs:
             Check:
             - Correctness: logic errors, unhandled edge cases, callers broken
               by the change.
-            - Loops and failure paths: in every loop the change adds or
-              touches, work repeated per iteration that one pass could do,
-              and state read before the loop that a write inside it makes
-              stale. At every throw or early exit in the middle of a
-              sequence, what is already written, and whether the cleanup,
-              cache clear or flag after it still runs.
             - Security: injection, missing authorization, secrets in code or
               logs, unsafe handling of files and URLs.
             - Performance: queries or I/O in loops, unbounded loads, no
@@ -119,8 +110,9 @@ jobs:
               config without a migration path.
             - Tests: a new condition on outside input without a test.
             ${{ steps.context.outputs.rules }}
-            Breaking these, AGENTS.md or CLAUDE.md is blocking (❌ in the
-            rules); the rest is a warning (⚠️).
+            Blocking (❌): a rule marked ❌, a rule of AGENTS.md or CLAUDE.md,
+            or a defect that loses or corrupts data, fails at runtime or
+            opens a security hole. Everything else is a warning (⚠️).
 
             A finding about behaviour names the input or the sequence of
             events that triggers it and what goes wrong then. Verify it in
@@ -137,28 +129,27 @@ jobs:
 
             Post nothing yourself; return the structured output, in
             English, terse, no praise, no restating the diff:
-            - `findings`: new ones only: every blocking one and the 5 most
-              severe warnings. `path` and `line`: the number a hunk line
-              starts with, never the line number of the diff part itself; a
-              finding with no line of its own (a missing test, a missing
-              migration) takes the changed line closest to it. `title`: the defect in one
-              sentence. `body`: at most 3 sentences: defect, trigger, fix.
-              `suggestion`, only when the fix replaces at most 10 lines:
-              the complete replacement of lines `start_line` to `line`,
-              indentation included, nothing else.
+            - `findings`: new ones only, one defect per finding unless a
+              rule groups them: every blocking one and the 5 most severe
+              warnings. `path` and `line`: the number a hunk line starts
+              with, never the line number of the diff part itself; a finding
+              with no line of its own (a missing test, a missing migration)
+              takes the changed line closest to it. `title`: the defect in
+              one sentence. `body`: at most 3 sentences: defect, trigger,
+              fix. `suggestion`, only when the fix replaces at most 10 lines
+              of one hunk: the text that replaces lines `start_line` through
+              `line`, indentation included, nothing else. Both numbers are
+              then required, and `line` is the last replaced line.
             - `more_warnings`: how many warnings you left out.
             - `resolved`: the `url` of every earlier finding you found
               resolved.
-            - `not_read`: every file of the diff parts whose hunks you
-              did not read to the end, as `path: reason`. It is for a file
-              you could not read, not for one you chose to skip.
           claude_args: |
             --model claude-sonnet-5-5
             --permission-mode default
             --add-dir "${{ steps.context.outputs.dir }}"
             --allowedTools "Read,Grep,Glob"
             --disallowedTools "Bash,Edit,Write,MultiEdit,NotebookEdit"
-            --json-schema '{"type":"object","additionalProperties":false,"required":["findings","more_warnings","resolved","not_read"],"properties":{"findings":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["blocking","path","line","title","body"],"properties":{"blocking":{"type":"boolean"},"path":{"type":"string"},"line":{"type":"integer"},"start_line":{"type":"integer"},"title":{"type":"string"},"body":{"type":"string"},"suggestion":{"type":"string"}}}},"more_warnings":{"type":"integer"},"resolved":{"type":"array","items":{"type":"string"}},"not_read":{"type":"array","items":{"type":"string"}}}}'
+            --json-schema '{"type":"object","additionalProperties":false,"required":["findings","more_warnings","resolved"],"properties":{"findings":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["blocking","path","line","title","body"],"properties":{"blocking":{"type":"boolean"},"path":{"type":"string"},"line":{"type":"integer"},"start_line":{"type":"integer"},"title":{"type":"string"},"body":{"type":"string"},"suggestion":{"type":"string"}}}},"more_warnings":{"type":"integer"},"resolved":{"type":"array","items":{"type":"string"}}}}'
 
       - if: steps.context.outputs.total != '0' || steps.context.outputs.scope == 'full'
         env:

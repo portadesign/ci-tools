@@ -3,11 +3,10 @@
   `object_*` skips versions, cache, events and dependency tracking: ❌.
   Static tables (`settings_store`, translations, the project's own) may
   take SQL. `save()` carries a version note. `setOmitMandatoryCheck(true)`
-  only in an import. Cache invalidation after a write.
-- Listings: no unbounded `load()` on a class that grows; chunk it.
-  `setUnpublished(true)` when drafts matter. Pimcore `key` and asset
-  `filename` are case-sensitive: `Foo` and `foo` can both exist, a
-  case-insensitive PHP match finds both.
+  only in an import.
+- Listings: no unbounded `load()` on a class that grows; chunk it. Pimcore
+  `key` and asset `filename` are case-sensitive: `Foo` and `foo` can both
+  exist, a case-insensitive PHP match finds both.
 - Class definitions: `ClassDefinition::save()` drops every column and
   relation missing from `getFieldDefinitions()`, for all objects, outside
   any transaction. A call to `setFieldDefinitions()` is ❌; so is code or a
