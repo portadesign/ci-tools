@@ -33,7 +33,8 @@ curl -fsSL https://raw.githubusercontent.com/portadesign/ci-tools/main/bin/ci-to
 
 The command writes `.github/workflows/claude-review.yml` and creates the label. Commit the file.
 
-A repository installed before the review on push was added: run the command again and commit the change.
+The file only forwards pull request events; which of them start a review is decided here, so it needs no
+reinstall when the review changes.
 
 ### Rules
 
